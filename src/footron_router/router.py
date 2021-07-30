@@ -10,7 +10,7 @@ import footron_protocol as protocol
 from fastapi import WebSocket
 from starlette.concurrency import run_until_first_complete
 from starlette.websockets import WebSocketState
-from websockets.exceptions import ConnectionClosedError
+from websockets.exceptions import ConnectionClosed
 
 from .util import asyncio_interval
 
@@ -27,7 +27,7 @@ async def _checked_socket_send(message: JsonDict, socket: WebSocket) -> bool:
 
     try:
         await socket.send_json(message)
-    except (RuntimeError, ConnectionClosedError) as e:
+    except (RuntimeError, ConnectionClosed) as e:
         logger.error(f"Error during socket send: {e}")
         return False
     return True
@@ -39,7 +39,7 @@ async def _checked_socket_close(socket: WebSocket) -> bool:
 
     try:
         await socket.close()
-    except (RuntimeError, ConnectionClosedError) as e:
+    except (RuntimeError, ConnectionClosed) as e:
         logger.error(f"Error during socket close: {e}")
         return False
     return True
