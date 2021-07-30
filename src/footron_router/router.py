@@ -45,6 +45,9 @@ async def _checked_socket_close(socket: WebSocket) -> bool:
     return True
 
 
+# TODO: _AppBoundMessageInfo and _ClientBoundMessageInfo are likely obsoleted by
+#  protocol.AppClientIdentifiableMixin, which lets us use app and client fields where
+#  needed. We should carefully remove these two classes.
 @dataclasses.dataclass
 class _AppBoundMessageInfo:
     client: str
