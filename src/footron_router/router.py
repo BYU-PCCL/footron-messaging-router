@@ -169,10 +169,20 @@ class _AppConnection:
                 await self.send_heartbeat(message.client, False)
                 return
 
+            client = self.router.clients[message.client]
+
             if isinstance(message, protocol.AccessMessage):
-                self.add_client(
-                    self.router.clients[message.client]
-                ) if message.accepted else self.remove_client(message.client)
+                if not self.lock:
+                    await self.queue.put(
+                        protocol.ErrorMessage(
+                            error="A lock is required to send access responses"
+                        )
+                    )
+                    return
+
+                self.add_client(client) if message.accepted else self.remove_client(
+                    message.client
+                )
 
             return await self._send_to_client(message)
 
