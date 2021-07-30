@@ -14,5 +14,9 @@ class RouterAuthProtocol(Protocol):
         ...
 
     @abstractmethod
+    async def advance(self) -> None:
+        ...
+
+    @abstractmethod
     def add_listener(self, callback: AuthCallback) -> None:
         ...

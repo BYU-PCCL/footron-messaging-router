@@ -111,6 +111,16 @@ class _AppConnection:
     async def send_client_heartbeats(self):
         return await self.send_heartbeat(list(self.clients.keys()), True)
 
+    async def connect_existing_client(self, client: _ClientConnection):
+        # Send directly to the socket instead of queuing to avoid the side effect of
+        # automatically sending an access message back to the client in
+        # _handle_send_message.
+        # TODO: Determine if this ugliness points to a need for a better abstraction
+        await _checked_socket_send(
+            protocol.serialize(protocol.ConnectMessage(client=client.id)), self.socket
+        )
+        self.clients[client.id] = client
+
     async def remove_client(self, client_id: str):
         """Notify app that a client has been disconnected."""
         if client_id not in self.clients:
@@ -442,6 +452,13 @@ class MessagingRouter:
     async def _connect_app(self, connection: _AppConnection):
         await connection.connect()
         self.apps[connection.id] = connection
+        await self._prune_clients()
+
+        # Only one client should stay connected through an app transition--if multiple
+        # are connected then we have a race condition or a bug in our state management
+        # somewhere
+        if len(self.clients):
+            await connection.connect_existing_client(next(iter(self.clients.values())))
 
     async def _disconnect_app(self, connection: _AppConnection):
         await connection.close()
@@ -449,7 +466,35 @@ class MessagingRouter:
         if connection.id not in self.apps:
             return
 
+        await self._prune_clients()
+
         del self.apps[connection.id]
+
+    async def _prune_clients(self):
+        # If multiple clients are connected, deauth them all. We do this because
+        # connecting multiple clients requires an app-controlled interaction lock that
+        # will prevent anyone not in the group of connected clients from scanning in.
+
+        # @vinhowe: The rationale here is that it seems fair to kick everyone in a group
+        # with exclusive control so they can't monopolize the display; If we let any
+        # member of a lock group stay connected, they could instantly jump into another
+        # locked session. We really don't want people to feel like they can't interact
+        # with the display because someone else is "using it," and I figure making users
+        # scan in again makes it a little more obvious that the display is meant to be
+        # a public installation and not a game console.
+        #
+        # It's totally possible that this isn't enough. We want the ability to highlight
+        # the game development work done in our department, and I think that a short
+        # multiplayer game session created by a student here could inspire someone to
+        # get into computer science. But if we find that groups are preventing others
+        # from interacting with the display, we will need to either come up with some
+        # other mitigation (like cooldowns for some types of experiences) or remove the
+        # lock API and force developers using it to retool their apps.
+        if len(self.clients) <= 1:
+            return
+
+        await self.auth.advance()
+        [self._disconnect_client(client) for client in self.clients.values()]
 
     async def _try_connect_client(self, connection: _ClientConnection):
         await connection.connect()
