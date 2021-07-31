@@ -18,6 +18,9 @@ class _DevAuthManager(RouterAuthProtocol):
     def add_listener(self, callback: AuthCallback) -> None:
         pass
 
+    async def advance(self) -> None:
+        pass
+
 
 app = FastAPI()
 _messaging_router: MessagingRouter
