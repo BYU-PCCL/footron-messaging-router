@@ -15,6 +15,9 @@ class _DevAuthManager(RouterAuthProtocol):
     def check(self, _: str) -> bool:
         return True
 
+    def check_next(self, _: str) -> bool:
+        return True
+
     def add_listener(self, callback: AuthCallback) -> None:
         pass
 

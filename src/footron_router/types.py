@@ -14,6 +14,10 @@ class RouterAuthProtocol(Protocol):
         ...
 
     @abstractmethod
+    def check_next(self, auth_code: str) -> bool:
+        ...
+
+    @abstractmethod
     async def advance(self) -> None:
         ...
 

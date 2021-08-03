@@ -509,7 +509,9 @@ class MessagingRouter:
     async def _try_connect_client(self, connection: _ClientConnection):
         await connection.connect()
 
-        if not self.auth.check(connection.auth_code):
+        if not self.auth.check(connection.auth_code) and not self.auth.check_next(
+            connection.auth_code
+        ):
             await connection.deauth()
             await connection.close()
             return
