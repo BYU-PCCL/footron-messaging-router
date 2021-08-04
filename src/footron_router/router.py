@@ -439,6 +439,10 @@ class MessagingRouter:
         )
 
         await self._connect_app(connection)
+
+        if connection.socket.application_state != WebSocketState.CONNECTED:
+            await self._disconnect_app(connection)
+            return
         try:
             await run_until_first_complete(
                 (connection.receive_handler, {}),
@@ -451,6 +455,10 @@ class MessagingRouter:
         connection = _ClientConnection(socket, str(uuid.uuid4()), auth_code, self)
 
         await self._try_connect_client(connection)
+
+        if connection.socket.application_state != WebSocketState.CONNECTED:
+            await self._disconnect_client(connection, deauth=False)
+            return
         try:
             await run_until_first_complete(
                 (connection.receive_handler, {}),
