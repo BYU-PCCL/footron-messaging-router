@@ -157,9 +157,7 @@ class _AppConnection:
     async def _handle_receive_message(self, message: protocol.BaseMessage):
         if hasattr(message, "client"):
             # TODO: Assert that these two statements are always equal
-            if not self.has_client(message.client) or not self.router.client_connected(
-                message.client
-            ):
+            if not self.router.client_connected(message.client):
                 # This should always be an developer error, but if it isn't (e.g.
                 # we're sending positive heartbeats that include disconnected
                 # clients), we need to fix our code
@@ -183,6 +181,18 @@ class _AppConnection:
                 self.add_client(client) if message.accepted else self.remove_client(
                     message.client
                 )
+
+                await self.router.clients[message.client].send_message_from_app(
+                    self.id, message
+                )
+                return
+
+            if not self.has_client(message.client):
+                logger.warning(
+                    f"App {self.id} attempted to send application-level message to unauthenticated client with id {message.client}"
+                )
+                await self.send_heartbeat(message.client, False)
+                return
 
             return await self._send_to_client(message)
 
