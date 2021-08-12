@@ -534,7 +534,10 @@ class MessagingRouter:
 
         await self.auth.advance()
         await asyncio.gather(
-            *[await self._disconnect_client(client) for client in self.clients.values()]
+            *[
+                await self._disconnect_client(client)
+                for client in list(self.clients.values())
+            ]
         )
 
     async def _try_connect_client(self, connection: _ClientConnection):
@@ -606,7 +609,8 @@ class MessagingRouter:
             *map(
                 self._disconnect_client,
                 filter(
-                    lambda c: not self.auth.check(c.auth_code), self.clients.values()
+                    lambda c: not self.auth.check(c.auth_code),
+                    list(self.clients.values()),
                 ),
             )
         )
