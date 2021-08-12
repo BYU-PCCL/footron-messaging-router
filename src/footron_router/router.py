@@ -187,6 +187,8 @@ class _AppConnection:
             return await self._send_to_client(message)
 
         if isinstance(message, protocol.DisplaySettingsMessage):
+            if message.settings.lock:
+                self.lock = message.settings.lock
             return self.display_settings_callback(message.settings)
 
         raise protocol.UnhandledMessageTypeError(
