@@ -182,6 +182,9 @@ class _AppConnection:
                     message.client
                 )
 
+                # TODO: DO THIS SOME BETTER WAY! GET RID OF CLIENT MESSAGE INFO THING
+                message.app = self.id
+
                 await self.router.clients[message.client].send_message_from_app(
                     self.id, message
                 )
