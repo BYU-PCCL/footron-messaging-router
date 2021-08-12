@@ -126,6 +126,7 @@ class _AppConnection:
         if client_id not in self.clients:
             return
 
+        self.clients[client_id].app_id = None
         del self.clients[client_id]
 
         return await self.send_heartbeat(client_id, False)
