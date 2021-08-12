@@ -72,7 +72,7 @@ class _AppConnection:
     router: MessagingRouter
     queue: asyncio.Queue[
         Union[protocol.BaseMessage, _AppBoundMessageInfo]
-    ] = asyncio.Queue()
+    ] = dataclasses.field(default_factory=asyncio.Queue)
     clients: Dict[str, _ClientConnection] = dataclasses.field(default_factory=dict)
     closed = False
     lock: protocol.Lock = False
@@ -270,7 +270,7 @@ class _ClientConnection:
     app_id: str = None
     queue: asyncio.Queue[
         Union[protocol.BaseMessage, _ClientBoundMessageInfo]
-    ] = asyncio.Queue()
+    ] = dataclasses.field(default_factory=asyncio.Queue)
     closed = False
 
     async def _send_or_disconnect(self, message: JsonDict):
@@ -298,9 +298,9 @@ class _ClientConnection:
 
     async def send_heartbeat(self, app: str, up: bool):
         logger.debug(f"Sending heartbeat to client: {self.id}")
-        await self._send_or_disconnect(
-            protocol.serialize(protocol.HeartbeatAppMessage(app=app, up=up)),
-        )
+        # await self._send_or_disconnect(
+        #     protocol.serialize(protocol.HeartbeatAppMessage(app=app, up=up)),
+        # )
 
     async def connect(self):
         return await self.socket.accept()
