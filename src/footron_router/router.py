@@ -164,6 +164,11 @@ class _AppConnection:
                 logger.warning(
                     f"App {self.id} attempted to send a message to non-existent client with id {message.client}"
                 )
+
+                # Correct if client is somehow leftover in internal state
+                if self.has_client(message.client):
+                    await self.remove_client(message.client)
+
                 await self.send_heartbeat(message.client, False)
                 return
 
