@@ -178,9 +178,9 @@ class _AppConnection:
                     )
                     return
 
-                self.add_client(client) if message.accepted else self.remove_client(
-                    message.client
-                )
+                await self.add_client(
+                    client
+                ) if message.accepted else await self.remove_client(message.client)
 
                 # TODO: DO THIS SOME BETTER WAY! GET RID OF CLIENT MESSAGE INFO THING
                 message.app = self.id
