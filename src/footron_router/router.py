@@ -493,7 +493,6 @@ class MessagingRouter:
         self.apps[connection.id] = connection
         await self._prune_clients()
 
-        self._notify_display_settings_listeners(protocol.DisplaySettings(lock=False))
         # Only one client should stay connected through an app transition--if multiple
         # are connected then we have a race condition or a bug in our state management
         # somewhere
