@@ -535,7 +535,7 @@ class MessagingRouter:
         await self.auth.advance()
         await asyncio.gather(
             *[
-                await self._disconnect_client(client)
+                self._disconnect_client(client)
                 for client in list(self.clients.values())
             ]
         )
