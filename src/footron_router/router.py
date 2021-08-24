@@ -293,8 +293,12 @@ class _ClientConnection:
             ),
         )
 
-    async def deauth(self, reason="Your authentication code is expired or invalid"):
-        return await self.send_access_message(False, reason=reason)
+    async def deauth(
+        self,
+        reason="Your authentication code is expired or invalid",
+        app_id: str = None,
+    ):
+        return await self.send_access_message(False, reason=reason, app_id=app_id)
 
     async def send_heartbeat(self, app: str, up: bool):
         logger.debug(f"Sending heartbeat to client: {self.id}")
