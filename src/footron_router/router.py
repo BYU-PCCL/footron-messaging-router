@@ -214,22 +214,36 @@ class _AppConnection:
             f"Unable to handle message type '{message.type}' from app '{self.id}'"
         )
 
+    async def _handle_connect_message(self, message: protocol.ConnectMessage):
+        try:
+            client = self.router.clients[message.client]
+        except KeyError:
+            logging.error(
+                f"Client '{message.client}' sent a connect message to app '{self.id}', but isn't connected"
+            )
+            return
+
+        if self.lock is True or (
+            isinstance(self.lock, int)
+            and not isinstance(self.lock, bool)
+            and len(self.clients) >= self.lock
+        ):
+            # TODO: Come up with a less terse message (eventually the user might
+            #  see these)
+            await client.deauth("A session lock is in effect", app_id=self.id)
+            return
+
+        await self.add_client(client)
+        await client.send_access_message(True, app_id=self.id)
+
     async def _handle_send_message(
         self, item: Union[protocol.BaseMessage, _AppBoundMessageInfo]
     ):
         message = None
         if isinstance(item, _AppBoundMessageInfo):
 
-            # TODO (ASAP): Finish defining lock logic--for example, we need to make sure
-            #  not to kick an existing client off when a new client scans a new lock
-            #  auth code--which sounds just a little tricky
-            if isinstance(item.message, protocol.ConnectMessage) and not self.lock:
-                await self.add_client(self.router.clients[item.client])
-                await self._send_to_client(
-                    protocol.AccessMessage(
-                        app=self.id, client=item.client, accepted=True
-                    )
-                )
+            if isinstance(item.message, protocol.ConnectMessage):
+                await self._handle_connect_message(item.message)
 
             message = protocol.serialize(item.message)
             # App needs to know source of client messages
