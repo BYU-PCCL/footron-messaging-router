@@ -534,10 +534,7 @@ class MessagingRouter:
 
         await self.auth.advance()
         await asyncio.gather(
-            *[
-                self._disconnect_client(client)
-                for client in list(self.clients.values())
-            ]
+            *[self._disconnect_client(client) for client in list(self.clients.values())]
         )
 
     async def _try_connect_client(self, connection: _ClientConnection):
