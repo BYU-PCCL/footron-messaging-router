@@ -45,21 +45,6 @@ async def _checked_socket_close(socket: WebSocket) -> bool:
     return True
 
 
-# TODO: _AppBoundMessageInfo and _ClientBoundMessageInfo are likely obsoleted by
-#  protocol.AppClientIdentifiableMixin, which lets us use app and client fields where
-#  needed. We should carefully remove these two classes.
-@dataclasses.dataclass
-class _AppBoundMessageInfo:
-    client: str
-    message: protocol.BaseMessage
-
-
-@dataclasses.dataclass
-class _ClientBoundMessageInfo:
-    app: str
-    message: protocol.BaseMessage
-
-
 # TODO: Consider if AppConnection and ClientConnection are similar enough that they
 #  can share logic
 @dataclasses.dataclass
@@ -70,9 +55,9 @@ class _AppConnection:
     # TODO: I don't love how we're passing in an instance of the containing class
     #  here, is this clean?
     router: MessagingRouter
-    queue: asyncio.Queue[
-        Union[protocol.BaseMessage, _AppBoundMessageInfo]
-    ] = dataclasses.field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue[protocol.BaseMessage] = dataclasses.field(
+        default_factory=asyncio.Queue
+    )
     clients: Dict[str, _ClientConnection] = dataclasses.field(default_factory=dict)
     closed = False
     lock: protocol.Lock = False
@@ -80,7 +65,12 @@ class _AppConnection:
     async def send_message_from_client(
         self, client_id: str, message: protocol.BaseMessage
     ):
-        return await self.queue.put(_AppBoundMessageInfo(client_id, message))
+        if not issubclass(message.__class__, protocol.AppClientIdentifiableMixin):
+            raise protocol.ProtocolError(
+                f"Client {client_id} attempted to send message type with no 'client' field"
+            )
+        message.client = client_id
+        return await self.queue.put(message)
 
     async def connect(self):
         return await self.socket.accept()
@@ -236,25 +226,11 @@ class _AppConnection:
         await self.add_client(client)
         await client.send_access_message(True, app_id=self.id)
 
-    async def _handle_send_message(
-        self, item: Union[protocol.BaseMessage, _AppBoundMessageInfo]
-    ):
-        message = None
-        if isinstance(item, _AppBoundMessageInfo):
+    async def _handle_send_message(self, message: protocol.BaseMessage):
+        if isinstance(message, protocol.ConnectMessage):
+            await self._handle_connect_message(message)
 
-            if isinstance(item.message, protocol.ConnectMessage):
-                await self._handle_connect_message(item.message)
-
-            message = protocol.serialize(item.message)
-            # App needs to know source of client messages
-            message["client"] = item.client
-        if isinstance(item, protocol.BaseMessage):
-            message = protocol.serialize(item)
-
-        if message is None:
-            raise TypeError("Message wasn't _AppBoundMessageInfo or BaseMessage")
-
-        return await _checked_socket_send(message, self.socket)
+        return await _checked_socket_send(protocol.serialize(message), self.socket)
 
     async def _send_to_client(
         self, message: Union[protocol.BaseMessage, protocol.AppClientIdentifiableMixin]
@@ -282,9 +258,9 @@ class _ClientConnection:
     router: MessagingRouter
     # While this is None, no app has accepted this client connection
     app_id: str = None
-    queue: asyncio.Queue[
-        Union[protocol.BaseMessage, _ClientBoundMessageInfo]
-    ] = dataclasses.field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue[protocol.BaseMessage] = dataclasses.field(
+        default_factory=asyncio.Queue
+    )
     closed = False
 
     async def _send_or_disconnect(self, message: JsonDict):
@@ -295,7 +271,12 @@ class _ClientConnection:
             await self.close()
 
     async def send_message_from_app(self, app_id: str, message: protocol.BaseMessage):
-        return await self.queue.put(_ClientBoundMessageInfo(app_id, message))
+        if not issubclass(message.__class__, protocol.AppClientIdentifiableMixin):
+            raise protocol.ProtocolError(
+                f"App {app_id} attempted to send message type with no 'app' field"
+            )
+        message.app = app_id
+        return await self.queue.put(message)
 
     async def send_access_message(
         self, accepted: bool, *, reason: str = None, app_id: str = None
@@ -388,33 +369,16 @@ class _ClientConnection:
 
         return await self.router.apps[app_id].send_message_from_client(self.id, message)
 
-    async def _handle_send_message(
-        self, item: Union[protocol.BaseMessage, _ClientBoundMessageInfo]
-    ):
+    async def _handle_send_message(self, message: protocol.BaseMessage):
         """Return false to cancel connection, true to continue without sending"""
 
         if self.closed:
             return False
 
-        message = None
-        serialized_message = None
+        if not self._pre_send(message):
+            return True
 
-        if isinstance(item, _ClientBoundMessageInfo):
-            if not self._pre_send(item.message):
-                return True
-            message = item.message
-            serialized_message = protocol.serialize(message)
-            # Client needs to know source of app messages
-            serialized_message["app"] = item.app
-        if isinstance(item, protocol.BaseMessage):
-            if not self._pre_send(item):
-                return True
-            message = item
-            serialized_message = protocol.serialize(message)
-
-        if message is None:
-            raise TypeError("Message wasn't _AppBoundMessageInfo or BaseMessage")
-
+        serialized_message = protocol.serialize(message)
         # Client doesn't need to know its ID because it doesn't have to self-identify
         del serialized_message["client"]
         await self._send_or_disconnect(serialized_message)
