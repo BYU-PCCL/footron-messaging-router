@@ -276,12 +276,8 @@ class _ClientConnection:
     async def send_access_message(
         self, accepted: bool, *, reason: str = None, app_id: str = None
     ):
-        # This needs to be sent immediately
-        await self._send_or_disconnect(
-            protocol.serialize(
-                protocol.AccessMessage(accepted=accepted, reason=reason, app=app_id)
-            ),
-        )
+        message = protocol.AccessMessage(accepted=accepted, reason=reason, app=app_id)
+        return await self.queue.put(message)
 
     async def deauth(
         self,
