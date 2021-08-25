@@ -178,12 +178,7 @@ class _AppConnection:
                     client
                 ) if message.accepted else await self.remove_client(message.client)
 
-                # TODO: DO THIS SOME BETTER WAY! GET RID OF CLIENT MESSAGE INFO THING
-                message.app = self.id
-
-                await self.router.clients[message.client].send_message_from_app(
-                    self.id, message
-                )
+                await self._send_to_client(message)
                 return
 
             if not self.has_client(message.client):
