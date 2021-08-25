@@ -297,9 +297,9 @@ class _ClientConnection:
 
     async def send_heartbeat(self, app: str, up: bool):
         logger.debug(f"Sending heartbeat to client: {self.id}")
-        # await self._send_or_disconnect(
-        #     protocol.serialize(protocol.HeartbeatAppMessage(app=app, up=up)),
-        # )
+        await self._send_or_disconnect(
+            protocol.serialize(protocol.HeartbeatAppMessage(app=app, up=up)),
+        )
 
     async def connect(self):
         return await self.socket.accept()
