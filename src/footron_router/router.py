@@ -371,7 +371,10 @@ class _ClientConnection:
 
         serialized_message = protocol.serialize(message)
         # Client doesn't need to know its ID because it doesn't have to self-identify
-        del serialized_message["client"]
+        try:
+            del serialized_message["client"]
+        except KeyError:
+            pass
         await self._send_or_disconnect(serialized_message)
 
         if not self._post_send(message):
