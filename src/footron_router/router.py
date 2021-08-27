@@ -178,7 +178,9 @@ class _AppConnection:
                     client
                 ) if message.accepted else await self.remove_client(message.client)
 
-                await self._send_to_client(message)
+                await client.send_message_from_app(
+                    self.id, message
+                )
                 return
 
             if not self.has_client(message.client):
