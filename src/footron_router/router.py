@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import datetime
 import logging
 import uuid
 from typing import Dict, Union, TYPE_CHECKING, List, Set, Optional
@@ -58,6 +59,7 @@ class _AppConnection:
     queue: asyncio.Queue[protocol.BaseMessage] = dataclasses.field(
         default_factory=asyncio.Queue
     )
+    last_client_message_time: datetime.datetime = None
     clients: Dict[str, _ClientConnection] = dataclasses.field(default_factory=dict)
     closed = False
     lock: protocol.Lock = False
@@ -70,6 +72,7 @@ class _AppConnection:
                 f"Client {client_id} attempted to send message type with no 'client' field"
             )
         message.client = client_id
+        self.last_client_message_time = datetime.datetime.now()
         return await self.queue.put(message)
 
     async def connect(self):
@@ -565,14 +568,33 @@ class MessagingRouter:
     def remove_display_settings_listener(self, callback: DisplaySettingsCallback):
         self.display_settings_listeners.remove(callback)
 
-    def _notify_display_settings_listeners(self, settings: protocol):
+    def _notify_display_settings_listeners(self, settings: protocol.DisplaySettings):
         [callback(settings) for callback in self.display_settings_listeners]
 
     async def _send_heartbeats(self):
         """Send heartbeats to all connected clients and apps"""
         tasks = []
+        latest_message_time = datetime.datetime.fromtimestamp(0)
+        any_lock = False
         for app in self.apps.values():
+            if (
+                app.last_client_message_time
+                and app.last_client_message_time > latest_message_time
+            ):
+                latest_message_time = app.last_client_message_time
+            if app.lock is True:
+                any_lock = True
             tasks.append(app.send_client_heartbeats())
+
+        now = datetime.datetime.now()
+        # Push back end time by 30s if we've received a message in the last 30s AND no
+        # connected apps have a closed lock
+        if not any_lock and (now - latest_message_time).seconds < 1:
+            self._notify_display_settings_listeners(
+                settings=protocol.DisplaySettings(
+                    end_time=int((now + datetime.timedelta(seconds=30)).timestamp())
+                )
+            )
 
         for client in self.clients.values():
             if not client.app_id:
