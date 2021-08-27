@@ -240,9 +240,14 @@ class _AppConnection:
                 f"App '{self.id}' attempted to send message to client without specifying client ID"
             )
 
-        return await self.clients[message.client].send_message_from_app(
-            self.id, message
-        )
+        try:
+            await self.clients[message.client].send_message_from_app(
+                self.id, message
+            )
+        except KeyError:
+            raise ValueError(
+                f"App '{self.id}' attempted to send message to unregistered client '{message.client}'"
+            )
 
 
 @dataclasses.dataclass
