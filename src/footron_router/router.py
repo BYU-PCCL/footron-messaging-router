@@ -585,7 +585,12 @@ class MessagingRouter:
         now = datetime.datetime.now()
         # Push back end time by 30s if we've received a message in the last 30s AND no
         # connected apps have a closed lock
-        if not any_lock and (now - latest_message_time).seconds < 1:
+        message_time_delta = now - latest_message_time
+        if (
+            not any_lock
+            and message_time_delta.days == 0
+            and message_time_delta.seconds == 0
+        ):
             self._notify_display_settings_listeners(
                 settings=protocol.DisplaySettings(
                     end_time=int((now + datetime.timedelta(seconds=30)).timestamp())
