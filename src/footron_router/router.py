@@ -418,20 +418,20 @@ class _ClientConnection:
 
 
 class MessagingRouter:
-    auth: RouterAuthProtocol
+    _auth: RouterAuthProtocol
     apps: Dict[str, _AppConnection]
     # dict[connection id, connection]--multiple clients are only allowed when
     # either a lock is specified or multiuser is true in app config
     clients: Dict[str, _ClientConnection]
-    display_settings_listeners: Set[DisplaySettingsCallback]
+    _display_settings_listeners: Set[DisplaySettingsCallback]
 
     def __init__(self, auth: RouterAuthProtocol):
-        self.auth = auth
         self.apps = {}
         self.clients = {}
-        self.display_settings_listeners = set()
+        self._auth = auth
+        self._display_settings_listeners = set()
 
-        self.auth.add_listener(self._disconnect_deauthed_clients)
+        self._auth.add_listener(self._disconnect_deauthed_clients)
 
     async def run_heartbeating(self):
         await asyncio_interval(self._send_heartbeats, 0.5)
@@ -514,7 +514,7 @@ class MessagingRouter:
         if len(self.clients) <= 1:
             return
 
-        await self.auth.advance()
+        await self._auth.advance()
         await asyncio.gather(
             *[self._disconnect_client(client) for client in list(self.clients.values())]
         )
@@ -522,7 +522,7 @@ class MessagingRouter:
     async def _try_connect_client(self, connection: _ClientConnection):
         await connection.connect()
 
-        if not self.auth.check(connection.auth_code) and not self.auth.check_next(
+        if not self._auth.check(connection.auth_code) and not self._auth.check_next(
             connection.auth_code
         ):
             await connection.deauth()
@@ -559,13 +559,13 @@ class MessagingRouter:
         return client_id in self.clients
 
     def add_display_settings_listener(self, callback: DisplaySettingsCallback):
-        self.display_settings_listeners.add(callback)
+        self._display_settings_listeners.add(callback)
 
     def remove_display_settings_listener(self, callback: DisplaySettingsCallback):
-        self.display_settings_listeners.remove(callback)
+        self._display_settings_listeners.remove(callback)
 
     def _notify_display_settings_listeners(self, settings: protocol.DisplaySettings):
-        [callback(settings) for callback in self.display_settings_listeners]
+        [callback(settings) for callback in self._display_settings_listeners]
 
     async def _send_heartbeats(self):
         """Send heartbeats to all connected clients and apps"""
@@ -612,7 +612,7 @@ class MessagingRouter:
             *map(
                 self._disconnect_client,
                 filter(
-                    lambda c: not self.auth.check(c.auth_code),
+                    lambda c: not self._auth.check(c.auth_code),
                     list(self.clients.values()),
                 ),
             )
