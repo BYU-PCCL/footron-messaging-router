@@ -16,7 +16,8 @@ from websockets.exceptions import ConnectionClosed
 from .util import asyncio_interval
 
 if TYPE_CHECKING:
-    from .types import RouterAuthProtocol, JsonDict, DisplaySettingsCallback
+    from .types import RouterAuthProtocol, JsonDict, DisplaySettingsCallback, \
+    InteractionCallback
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class _AppConnection:
     clients: Dict[str, _ClientConnection] = dataclasses.field(default_factory=dict)
     closed = False
     lock: protocol.Lock = False
+    lock_last_update: Optional[datetime.datetime] = None
 
     async def send_message_from_client(
         self, client_id: str, message: protocol.BaseMessage
@@ -195,6 +197,7 @@ class _AppConnection:
 
         if isinstance(message, protocol.DisplaySettingsMessage):
             if message.settings.lock:
+                self.last_lock_update = datetime.datetime.now()
                 self.lock = message.settings.lock
             return self.display_settings_callback(message.settings)
 
@@ -424,12 +427,14 @@ class MessagingRouter:
     # either a lock is specified or multiuser is true in app config
     clients: Dict[str, _ClientConnection]
     _display_settings_listeners: Set[DisplaySettingsCallback]
+    interaction_listeners: Set[InteractionCallback]
 
     def __init__(self, auth: RouterAuthProtocol):
         self.apps = {}
         self.clients = {}
         self._auth = auth
         self._display_settings_listeners = set()
+        self.interaction_listeners = set()
 
         self._auth.add_listener(self._disconnect_deauthed_clients)
 
@@ -567,6 +572,15 @@ class MessagingRouter:
     def _notify_display_settings_listeners(self, settings: protocol.DisplaySettings):
         [callback(settings) for callback in self._display_settings_listeners]
 
+    def add_interaction_listener(self, callback: InteractionCallback):
+        self.interaction_listeners.add(callback)
+
+    def remove_interaction_listener(self, callback: InteractionCallback):
+        self.interaction_listeners.remove(callback)
+
+    def _notify_interaction_listeners(self, at: datetime):
+        [callback(at) for callback in self.interaction_listeners]
+
     async def _send_heartbeats(self):
         """Send heartbeats to all connected clients and apps"""
         tasks = []
@@ -578,24 +592,27 @@ class MessagingRouter:
                 and app.last_client_message_time > latest_message_time
             ):
                 latest_message_time = app.last_client_message_time
-            if app.lock is True:
+            if app.lock is True or (app.lock is False and app.lock_last_update):
                 any_lock = True
             tasks.append(app.send_client_heartbeats())
 
         now = datetime.datetime.now()
-        # Push back end time by 30s if we've received a message in the last 30s AND no
-        # connected apps have a closed lock
+
+        # Notify interaction listeners if we've received a message in the last 30s AND
+        # no connected apps either
+        # - have a closed lock
+        # - have no lock AND have a set lock_last_update field, meaning they were locked
+        #   at one point and are now unlocked, which means they're waiting to be cleaned
+        #   up by the timer
+        # This second point could cause us problems if we're not careful about
+        # sequencing and handling edge cases.
         message_time_delta = now - latest_message_time
         if (
             not any_lock
             and message_time_delta.days == 0
             and message_time_delta.seconds == 0
         ):
-            self._notify_display_settings_listeners(
-                settings=protocol.DisplaySettings(
-                    end_time=int((now + datetime.timedelta(seconds=30)).timestamp())
-                )
-            )
+            self._notify_interaction_listeners(now)
 
         for client in self.clients.values():
             if not client.app_id:
